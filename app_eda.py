@@ -267,59 +267,106 @@ class EDA:
 
 
     def yearly_trend(self):
-        df = self.df
         st.subheader("Nationwide Population Trend")
-        nat = df[df["지역"] == "전국"]
-        fig, ax = plt.subplots()
-        sns.lineplot(data=nat, x="연도", y="인구", ax=ax)
-        ax.set_title("Population Trend")
-        ax.set_xlabel("Year")
-        ax.set_ylabel("Population")
 
+        df = self.df.copy()
+
+        # '전국' 데이터만 필터링
+        nat = df[df["지역"] == "전국"]
+
+        # 연도 정렬 및 숫자형 변환
+        nat["연도"] = pd.to_numeric(nat["연도"], errors="coerce")
+        nat = nat.dropna(subset=["연도"]).sort_values("연도")
+
+        # 최근 3년 평균 출생-사망 차이로 2035년 인구 예측
         recent = nat.tail(3)
         avg_diff = (recent["출생아수(명)"] - recent["사망자수(명)"]).mean()
-        predicted_2035 = nat["인구"].iloc[-1] + avg_diff * (2035 - nat["연도"].iloc[-1])
-        ax.scatter(2035, predicted_2035, color='red')
-        ax.text(2035, predicted_2035, f"2035: {int(predicted_2035):,}", color='red')
+        years_forward = 2035 - nat["연도"].iloc[-1]
+        predicted_2035 = nat["인구"].iloc[-1] + avg_diff * years_forward
+
+        # 그래프 그리기
+        fig, ax = plt.subplots(figsize=(10, 5))
+        sns.lineplot(data=nat, x="연도", y="인구", ax=ax, label="Actual")
+
+        # 예측 점 표시
+        ax.scatter(2035, predicted_2035, color='red', label="Predicted 2035")
+        ax.text(2035, predicted_2035, f"{int(predicted_2035):,}", color='red', va='bottom')
+
+        ax.set_title("Population Trend Over Years")
+        ax.set_xlabel("Year")
+        ax.set_ylabel("Population")
+        ax.legend()
+
         st.pyplot(fig)
+
 
     def region_analysis(self):
-        df = self.df
+        df = self.df.copy()
         st.subheader("Regional 5-Year Change Analysis")
+
+        # 전국 제외
         region_df = df[df['지역'] != '전국']
+
+        # 최근 연도 및 5년 전 연도
         last_year = region_df['연도'].max()
+        past_year = last_year - 5
+
+        # 최근, 과거 인구 정보
         recent = region_df[region_df['연도'] == last_year]
-        past = region_df[region_df['연도'] == last_year - 5]
+        past = region_df[region_df['연도'] == past_year]
 
-        merged = pd.merge(recent[['지역', '인구']], past[['지역', '인구']], on='지역', suffixes=('_recent', '_past'))
-        merged['diff'] = (merged['인구_recent'] - merged['인구_past']) / 1000
-        merged['rate'] = (merged['diff'] / (merged['인구_past'] / 1000)) * 100
-        merged.sort_values(by='diff', ascending=False, inplace=True)
+        # 병합 및 변화량 계산
+        merged = pd.merge(
+            recent[['지역', '인구']],
+            past[['지역', '인구']],
+            on='지역',
+            suffixes=('_recent', '_past')
+            )
+
+        merged['diff'] = (merged['인구_recent'] - merged['인구_past']) / 1000  # 천 명 단위
+        merged['rate'] = (merged['diff'] / (merged['인구_past'] / 1000)) * 100  # 백분율
+
+        # 지역명 영문으로 변환 및 정렬
         merged['지역'] = merged['지역'].map(self.translate_dict)
+        merged.sort_values(by='diff', ascending=False, inplace=True)
 
-        fig, ax = plt.subplots(figsize=(10, 6))
-        sns.barplot(data=merged, y='지역', x='diff', ax=ax)
+        # 변화량 막대 그래프
+        fig1, ax1 = plt.subplots(figsize=(10, 6))
+        sns.barplot(data=merged, y='지역', x='diff', ax=ax1, palette='Blues_d')
         for i, val in enumerate(merged['diff']):
-            ax.text(val, i, f"{val:,.0f}", va='center')
-        ax.set_title("Population Change (last 5 years)")
-        ax.set_xlabel("Change (thousands)")
-        st.pyplot(fig)
+            ax1.text(val, i, f"{val:,.0f}", va='center')
+        ax1.set_title("Population Change (Last 5 Years)")
+        ax1.set_xlabel("Change (thousands)")
+        ax1.set_ylabel("")
 
-        fig, ax = plt.subplots(figsize=(10, 6))
-        sns.barplot(data=merged, y='지역', x='rate', ax=ax)
+        st.pyplot(fig1)
+
+        # 변화율 막대 그래프
+        fig2, ax2 = plt.subplots(figsize=(10, 6))
+        sns.barplot(data=merged, y='지역', x='rate', ax=ax2, palette='coolwarm')
         for i, val in enumerate(merged['rate']):
-            ax.text(val, i, f"{val:.1f}%", va='center')
-        ax.set_title("Population Change Rate (last 5 years)")
-        ax.set_xlabel("Rate (%)")
-        st.pyplot(fig)
+            ax2.text(val, i, f"{val:.1f}%", va='center')
+        ax2.set_title("Population Change Rate (Last 5 Years)")
+        ax2.set_xlabel("Rate (%)")
+        ax2.set_ylabel("")
 
-        st.markdown("Regions with growing populations show strong urban attraction, while declines may indicate aging or migration.")
-    def change_ranking(self):
+        st.pyplot(fig2)
+
+        # 해설 추가
+        st.markdown("""
+        **Interpretation:**  
+        - Regions with higher positive bars are experiencing population growth, potentially due to urbanization or policy support.  
+        - Regions with negative change or high decline rates may be affected by aging, low birth rates, or population outflow.
+        """)
+
+    def change_ranking(self): 
         df = self.df.copy()
         st.subheader("Top 100 Population Changes (by year/region)")
 
+        # 전처리
         df.columns = df.columns.str.strip()
-        if not {'지역', '연도', '인구'}.issubset(df.columns):
+        required_cols = {'지역', '연도', '인구'}
+        if not required_cols.issubset(df.columns):
             st.error("필수 컬럼(지역, 연도, 인구)이 누락되었습니다.")
             return
 
@@ -329,25 +376,33 @@ class EDA:
         df = df.dropna(subset=["연도", "인구", "지역"])
         df = df.sort_values(["지역", "연도"])
 
+        # 증감 계산
         df["증감"] = df.groupby("지역")["인구"].diff()
-        top = df.dropna(subset=["증감"]).sort_values(by="증감", ascending=False).head(100)
+        df = df.dropna(subset=["증감"])
+
+        # 상위 100개 추출
+        top = df.sort_values(by="증감", ascending=False).head(100).copy()
+        top["인구"] = top["인구"].apply(lambda x: f"{int(x):,}")
         top["증감_표시"] = top["증감"].apply(lambda x: f"{int(x):,}")
 
+        # 스타일링
+        styled = top[["연도", "지역", "인구", "증감", "증감_표시"]].style\
+            .format({"인구": "{:,}", "증감": "{:,.0f}"})\
+            .background_gradient(subset=["증감"], cmap="coolwarm", axis=0)
+
+        # 출력
         try:
-            st.dataframe(
-                top[["연도", "지역", "인구", "증감", "증감_표시"]].style.background_gradient(
-                    subset=["증감"], cmap="coolwarm", axis=0
-                )
-            )
+            st.dataframe(styled, use_container_width=True)
         except KeyError as e:
             st.error(f"KeyError 발생: {e}")
-    
-    def stacked_area(self):
+
+    def stacked_area(self): 
+
         st.subheader("Stacked Area Chart by Region")
-    
+
         df = self.df.copy()
 
-        # 필수 컬럼 존재 여부 확인
+        # 필수 컬럼 확인
         required_columns = {'지역', '연도', '인구'}
         df.columns = df.columns.str.strip()
         if not required_columns.issubset(df.columns):
@@ -355,7 +410,7 @@ class EDA:
             return
 
         try:
-            # '전국' 제외 및 데이터 정리
+            # '전국' 제외 및 정리
             df = df[df['지역'] != '전국']
             df['연도'] = pd.to_numeric(df['연도'], errors='coerce')
             df['인구'] = pd.to_numeric(df['인구'], errors='coerce')
@@ -367,16 +422,20 @@ class EDA:
             pivot.columns = [self.translate_dict.get(col, col) for col in pivot.columns]
             pivot = pivot.fillna(0)
 
-            # 시각화
+            # 누적 영역 그래프 그리기
             fig, ax = plt.subplots(figsize=(12, 6))
-            pivot.plot.area(ax=ax, cmap='tab20')
+            pivot.plot.area(ax=ax, cmap='tab20', linewidth=0)
+
             ax.set_title("Stacked Area Chart of Population by Region")
             ax.set_xlabel("Year")
             ax.set_ylabel("Population")
+            ax.legend(loc='upper left', bbox_to_anchor=(1.0, 1.0), title="Region")
+            plt.tight_layout()
+
             st.pyplot(fig)
 
         except Exception as e:
-            st.error(f"그래프 생성 중 오류 발생: {str(e)}")
+            st.error(f"Error during plot generation: {str(e)}")
 
 
 # ---------------------
