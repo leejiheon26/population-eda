@@ -245,26 +245,34 @@ class EDA:
     def basic_stats(self):
         st.subheader("기초 통계 및 데이터 구조")
 
-        # '세종' 지역 데이터 전처리
+        # 원본 데이터 복사
         df = self.df.copy()
+
+        # '세종' 지역의 모든 열에서 '-'를 0으로 치환
         sejong_mask = df['지역'] == '세종'
         df.loc[sejong_mask] = df.loc[sejong_mask].replace('-', 0)
 
-        # 숫자형 컬럼 변환
+        # '인구', '출생아수(명)', '사망자수(명)' 열을 숫자형으로 변환 (coerce: 오류값은 NaN 처리)
         for col in ['인구', '출생아수(명)', '사망자수(명)']:
             df[col] = pd.to_numeric(df[col], errors='coerce')
 
-        # 결측치 제거 또는 0으로 대체 (선택)
+        # NaN 값은 0으로 대체
         df.fillna(0, inplace=True)
 
-        # 결과 출력
+        # df.info() 출력 준비
         buffer = io.StringIO()
         df.info(buf=buffer)
         info_str = buffer.getvalue()
+
+        # Streamlit 출력
+        st.text("📊 데이터프레임 정보 (df.info()):")
         st.text(info_str)
 
+        st.markdown("📈 **기초 통계 요약 (df.describe())**")
         st.dataframe(df.describe())
 
+        # 정제된 df를 self.df로 다시 저장
+        self.df = df
 
     def yearly_trend(self):
         df = self.df
