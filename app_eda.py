@@ -298,38 +298,66 @@ class EDA:
     def change_ranking(self):
         df = self.df.copy()
         st.subheader("Top 100 Population Changes (by year/region)")
+
+        df.columns = df.columns.str.strip()
+        if not {'지역', '연도', '인구'}.issubset(df.columns):
+            st.error("필수 컬럼(지역, 연도, 인구)이 누락되었습니다.")
+            return
+
         df = df[df["지역"] != "전국"]
-        df = df.sort_values(["지역", "연도"])  # 연도 정렬 필수
-        
+        df["연도"] = pd.to_numeric(df["연도"], errors="coerce")
+        df["인구"] = pd.to_numeric(df["인구"], errors="coerce")
+        df = df.dropna(subset=["연도", "인구", "지역"])
+        df = df.sort_values(["지역", "연도"])
+
         df["증감"] = df.groupby("지역")["인구"].diff()
-        top = df.dropna().sort_values(by="증감", ascending=False).head(100)
-        # 시각화용 숫자 포맷 컬럼 따로 생성
+        top = df.dropna(subset=["증감"]).sort_values(by="증감", ascending=False).head(100)
         top["증감_표시"] = top["증감"].apply(lambda x: f"{int(x):,}")
-        # 숫자형 컬럼으로 그라디언트 적용
-        st.dataframe(
-            top[["연도", "지역", "인구", "증감_표시"]].style.background_gradient(
-                subset=["증감"], cmap="coolwarm", axis=0))
+
+        try:
+            st.dataframe(
+                top[["연도", "지역", "인구", "증감", "증감_표시"]].style.background_gradient(
+                    subset=["증감"], cmap="coolwarm", axis=0
+                )
+            )
+        except KeyError as e:
+            st.error(f"KeyError 발생: {e}")
     
     def stacked_area(self):
-        df = self.df.copy()
         st.subheader("Stacked Area Chart by Region")
-        df = df[df['지역'] != '전국']
+    
+        df = self.df.copy()
 
-        # 연도 정렬 및 숫자형 변환
-        df["연도"] = pd.to_numeric(df["연도"], errors="coerce")
-        df = df.dropna(subset=["연도"])
-        df = df.sort_values("연도")
+        # 필수 컬럼 존재 여부 확인
+        required_columns = {'지역', '연도', '인구'}
+        df.columns = df.columns.str.strip()
+        if not required_columns.issubset(df.columns):
+            st.error("필수 컬럼(지역, 연도, 인구)이 누락되었습니다.")
+            return
 
-        pivot = df.pivot(index='연도', columns='지역', values='인구')
-        pivot.columns = [self.translate_dict.get(col, col) for col in pivot.columns]
-        pivot = pivot.fillna(0)
+        try:
+            # '전국' 제외 및 데이터 정리
+            df = df[df['지역'] != '전국']
+            df['연도'] = pd.to_numeric(df['연도'], errors='coerce')
+            df['인구'] = pd.to_numeric(df['인구'], errors='coerce')
+            df = df.dropna(subset=['연도', '인구', '지역'])
+            df = df.sort_values("연도")
 
-        fig, ax = plt.subplots(figsize=(12, 6))
-        pivot.plot.area(ax=ax, cmap='tab20')
-        ax.set_title("Stacked Area Chart of Population by Region")
-        ax.set_xlabel("Year")
-        ax.set_ylabel("Population")
-        st.pyplot(fig)
+            # 피벗 테이블 생성
+            pivot = df.pivot(index='연도', columns='지역', values='인구')
+            pivot.columns = [self.translate_dict.get(col, col) for col in pivot.columns]
+            pivot = pivot.fillna(0)
+
+            # 시각화
+            fig, ax = plt.subplots(figsize=(12, 6))
+            pivot.plot.area(ax=ax, cmap='tab20')
+            ax.set_title("Stacked Area Chart of Population by Region")
+            ax.set_xlabel("Year")
+            ax.set_ylabel("Population")
+            st.pyplot(fig)
+
+        except Exception as e:
+            st.error(f"그래프 생성 중 오류 발생: {str(e)}")
 
 
 # ---------------------
