@@ -266,37 +266,28 @@ class EDA:
         st.dataframe(df.describe())
 
 
-    def yearly_trend(self):
-        st.subheader("Nationwide Population Trend")
-
+    def yearly_population_trend(self):
+        st.subheader("Nationwide Population Trend with 2035 Forecast")
+    
         df = self.df.copy()
-
-        # '전국' 데이터만 필터링
         nat = df[df["지역"] == "전국"]
-
-        # 연도 정렬 및 숫자형 변환
         nat["연도"] = pd.to_numeric(nat["연도"], errors="coerce")
-        nat = nat.dropna(subset=["연도"]).sort_values("연도")
+        nat["인구"] = pd.to_numeric(nat["인구"], errors="coerce")
+        nat = nat.dropna(subset=["연도", "인구"]).sort_values("연도")
 
-        # 최근 3년 평균 출생-사망 차이로 2035년 인구 예측
+        # 최근 3년 평균 순변화량 계산
         recent = nat.tail(3)
         avg_diff = (recent["출생아수(명)"] - recent["사망자수(명)"]).mean()
-        years_forward = 2035 - nat["연도"].iloc[-1]
-        predicted_2035 = nat["인구"].iloc[-1] + avg_diff * years_forward
+        predicted_2035 = nat["인구"].iloc[-1] + avg_diff * (2035 - nat["연도"].iloc[-1])
 
-        # 그래프 그리기
+        # 그래프
         fig, ax = plt.subplots(figsize=(10, 5))
-        sns.lineplot(data=nat, x="연도", y="인구", ax=ax, label="Actual")
-
-        # 예측 점 표시
-        ax.scatter(2035, predicted_2035, color='red', label="Predicted 2035")
-        ax.text(2035, predicted_2035, f"{int(predicted_2035):,}", color='red', va='bottom')
-
-        ax.set_title("Population Trend Over Years")
+        sns.lineplot(data=nat, x="연도", y="인구", marker="o", ax=ax)
+        ax.scatter(2035, predicted_2035, color="red")
+        ax.text(2035, predicted_2035, f"{int(predicted_2035):,}", color="red", va="bottom")
+        ax.set_title("Nationwide Population Trend")
         ax.set_xlabel("Year")
         ax.set_ylabel("Population")
-        ax.legend()
-
         st.pyplot(fig)
 
 
@@ -359,11 +350,10 @@ class EDA:
         - Regions with negative change or high decline rates may be affected by aging, low birth rates, or population outflow.
         """)
 
-    def change_ranking(self): 
-        df = self.df.copy()
-        st.subheader("Top 100 Population Changes (by year/region)")
+    def change_and_growth_ranking(self):
+        st.subheader("Top Population Change & Growth Rate")
 
-        # 전처리
+        df = self.df.copy()
         df.columns = df.columns.str.strip()
         required_cols = {'지역', '연도', '인구'}
         if not required_cols.issubset(df.columns):
@@ -373,69 +363,85 @@ class EDA:
         df = df[df["지역"] != "전국"]
         df["연도"] = pd.to_numeric(df["연도"], errors="coerce")
         df["인구"] = pd.to_numeric(df["인구"], errors="coerce")
-        df = df.dropna(subset=["연도", "인구", "지역"])
+        df = df.dropna(subset=["지역", "연도", "인구"])
         df = df.sort_values(["지역", "연도"])
 
-        # 증감 계산
+        # 인구 증감 및 증감률 계산
         df["증감"] = df.groupby("지역")["인구"].diff()
-        df = df.dropna(subset=["증감"])
+        df["증감률"] = df["증감"] / df.groupby("지역")["인구"].shift(1) * 100
 
-        # 상위 100개 추출
-        top = df.sort_values(by="증감", ascending=False).head(100).copy()
-        top["인구"] = top["인구"].apply(lambda x: f"{int(x):,}")
-        top["증감_표시"] = top["증감"].apply(lambda x: f"{int(x):,}")
+        # ▶ 상위 100 증감 순위 테이블
+        st.markdown("### 🔹 Top 100 Population Increase (by count)")
+        top_count = df.dropna(subset=["증감"]).sort_values(by="증감", ascending=False).head(100).copy()
+        top_count["인구"] = top_count["인구"].apply(lambda x: f"{int(x):,}")
+        top_count["증감_표시"] = top_count["증감"].apply(lambda x: f"{int(x):,}")
 
-        # 스타일링
-        styled = top[["연도", "지역", "인구", "증감", "증감_표시"]].style\
+        styled_count = top_count[["연도", "지역", "인구", "증감", "증감_표시"]].style\
             .format({"인구": "{:,}", "증감": "{:,.0f}"})\
             .background_gradient(subset=["증감"], cmap="coolwarm", axis=0)
 
-        # 출력
-        try:
-            st.dataframe(styled, use_container_width=True)
-        except KeyError as e:
-            st.error(f"KeyError 발생: {e}")
+        st.dataframe(styled_count, use_container_width=True)
 
-    def stacked_area(self): 
+        # ▶ 상위 20 증감률 순위 테이블
+        st.markdown("### 🔹 Top 20 Population Growth Rate (by %)")
+        top_rate = df.dropna(subset=["증감률"]).sort_values(by="증감률", ascending=False).head(20).copy()
+        top_rate["인구"] = top_rate["인구"].apply(lambda x: f"{int(x):,}")
+        top_rate["증감"] = top_rate["증감"].apply(lambda x: f"{int(x):,}")
+        top_rate["증감률"] = top_rate["증감률"].apply(lambda x: f"{x:.2f}%")
 
-        st.subheader("Stacked Area Chart by Region")
+        st.dataframe(top_rate[["연도", "지역", "인구", "증감", "증감률"]], use_container_width=True)
+
+    def population_overview_by_region(self):
+        st.subheader("📊 Regional Population Overview")
 
         df = self.df.copy()
-
-        # 필수 컬럼 확인
-        required_columns = {'지역', '연도', '인구'}
         df.columns = df.columns.str.strip()
+        required_columns = {'지역', '연도', '인구'}
+
         if not required_columns.issubset(df.columns):
             st.error("필수 컬럼(지역, 연도, 인구)이 누락되었습니다.")
             return
 
         try:
             # '전국' 제외 및 정리
-            df = df[df['지역'] != '전국']
-            df['연도'] = pd.to_numeric(df['연도'], errors='coerce')
-            df['인구'] = pd.to_numeric(df['인구'], errors='coerce')
-            df = df.dropna(subset=['연도', '인구', '지역'])
+            df = df[df["지역"] != "전국"]
+            df["연도"] = pd.to_numeric(df["연도"], errors="coerce")
+            df["인구"] = pd.to_numeric(df["인구"], errors="coerce")
+            df = df.dropna(subset=["연도", "인구", "지역"])
             df = df.sort_values("연도")
 
-            # 피벗 테이블 생성
-            pivot = df.pivot(index='연도', columns='지역', values='인구')
-            pivot.columns = [self.translate_dict.get(col, col) for col in pivot.columns]
-            pivot = pivot.fillna(0)
+            # 영어 변환 사전 적용 (선택 사항)
+            df["지역"] = df["지역"].apply(lambda x: self.translate_dict.get(x, x))
 
-            # 누적 영역 그래프 그리기
-            fig, ax = plt.subplots(figsize=(12, 6))
-            pivot.plot.area(ax=ax, cmap='tab20', linewidth=0)
+            # ▶ 1. 누적 영역 그래프용 피벗
+            pivot_area = df.pivot(index="연도", columns="지역", values="인구").fillna(0)
 
-            ax.set_title("Stacked Area Chart of Population by Region")
-            ax.set_xlabel("Year")
-            ax.set_ylabel("Population")
-            ax.legend(loc='upper left', bbox_to_anchor=(1.0, 1.0), title="Region")
+            st.markdown("### 1. Stacked Area Chart of Population by Region")
+            fig_area, ax_area = plt.subplots(figsize=(12, 6))
+            pivot_area.plot.area(ax=ax_area, cmap="tab20", linewidth=0)
+            ax_area.set_title("Stacked Area Chart of Population by Region")
+            ax_area.set_xlabel("Year")
+            ax_area.set_ylabel("Population")
+            ax_area.legend(loc="upper left", bbox_to_anchor=(1.0, 1.0), title="Region")
             plt.tight_layout()
+            st.pyplot(fig_area)
 
-            st.pyplot(fig)
+            # ▶ 2. 히트맵용 피벗
+            pivot_heatmap = df.pivot(index="지역", columns="연도", values="인구").fillna(0)
+            pivot_display = pivot_heatmap.applymap(lambda x: int(x))
+
+            st.markdown("### 2. Population Heatmap by Region and Year")
+            fig_heatmap, ax_heatmap = plt.subplots(figsize=(12, 8))
+            sns.heatmap(pivot_heatmap, cmap="YlGnBu", linewidths=0.5, ax=ax_heatmap)
+            ax_heatmap.set_title("Heatmap of Population by Region and Year")
+            st.pyplot(fig_heatmap)
+
+            # ▶ 3. 피벗 테이블 출력
+            st.markdown("### 3. Raw Pivot Table")
+            st.dataframe(pivot_display.style.format("{:,}"))
 
         except Exception as e:
-            st.error(f"Error during plot generation: {str(e)}")
+            st.error(f"Error during visualization: {str(e)}")
 
 
 # ---------------------
