@@ -46,22 +46,20 @@ class Home:
         if st.session_state.get("logged_in"):
             st.success(f"{st.session_state.get('user_email')}님 환영합니다.")
 
-        # Kaggle 데이터셋 출처 및 소개
+        # 인구 변화 데이터셋 소개
         st.markdown("""
-                ---
-                **Bike Sharing Demand 데이터셋**  
-                - 제공처: [Kaggle Bike Sharing Demand Competition](https://www.kaggle.com/c/bike-sharing-demand)  
-                - 설명: 2011–2012년 캘리포니아 주의 수도인 미국 워싱턴 D.C. 인근 도시에서 시간별 자전거 대여량을 기록한 데이터  
-                - 주요 변수:  
-                  - `datetime`: 날짜 및 시간  
-                  - `season`: 계절  
-                  - `holiday`: 공휴일 여부  
-                  - `workingday`: 근무일 여부  
-                  - `weather`: 날씨 상태  
-                  - `temp`, `atemp`: 기온 및 체감온도  
-                  - `humidity`, `windspeed`: 습도 및 풍속  
-                  - `casual`, `registered`, `count`: 비등록·등록·전체 대여 횟수  
-                """)
+            ---
+            **인구 변화 데이터셋 소개**  
+            - 출처: [통계청 공개자료 등 기반 (사용자 제공)]  
+            - 설명: 국내 지역별 인구, 출생아 수, 사망자 수의 연도별 변화 데이터를 담고 있음  
+            - 주요 변수:
+              - `연도`: 측정 연도  
+              - `지역`: 전국 및 각 광역시/도  
+              - `인구`: 해당 연도의 인구 수  
+              - `출생아수(명)`: 출생아 수  
+              - `사망자수(명)`: 사망자 수  
+            - 활용 목적: 연도별 인구 변화 시각화 및 분석, 지역별 인구 증감 비교  
+        """)
 
 # ---------------------
 # 로그인 페이지 클래스
@@ -202,252 +200,126 @@ class Logout:
 # ---------------------
 class EDA:
     def __init__(self):
-        st.title("📊 Bike Sharing Demand EDA")
-        uploaded = st.file_uploader("데이터셋 업로드 (population.csv)", type="csv")
-        if not uploaded:
-            st.info("population.csv 파일을 업로드 해주세요.")
-            return
+        st.title("Population Trends Analysis")
+        self.upload_file()
 
-        df = pd.read_csv(uploaded, parse_dates=['datetime'])
-
-        tabs = st.tabs([
-            "1. 목적 & 절차",
-            "2. 데이터셋 설명",
-            "3. 데이터 로드 & 품질 체크",
-            "4. Datetime 특성 추출",
-            "5. 시각화",
-            "6. 상관관계 분석",
-            "7. 이상치 제거",
-            "8. 로그 변환"
-        ])
-
-        # 1. 목적 & 분석 절차
-        with tabs[0]:
-            st.header("🔭 목적 & 분석 절차")
-            st.markdown("""
-            **목적**: Bike Sharing Demand 데이터셋을 탐색하고,
-            다양한 특성이 대여량(count)에 미치는 영향을 파악합니다.
-
-            **절차**:
-            1. 데이터 구조 및 기초 통계 확인  
-            2. 결측치/중복치 등 품질 체크  
-            3. datetime 특성(연도, 월, 일, 시, 요일) 추출  
-            4. 주요 변수 시각화  
-            5. 변수 간 상관관계 분석  
-            6. 이상치 탐지 및 제거  
-            7. 로그 변환을 통한 분포 안정화
-            """)
-
-        # 2. 데이터셋 설명
-        with tabs[1]:
-            st.header("🔍 데이터셋 설명")
-            st.markdown(f"""
-            - **train.csv**: 2011–2012년까지의 시간대별 대여 기록  
-            - 총 관측치: {df.shape[0]}개  
-            - 주요 변수:
-              - **datetime**: 날짜와 시간 (YYYY-MM-DD HH:MM:SS)  
-              - **season**: 계절 (1: 봄, 2: 여름, 3: 가을, 4: 겨울)  
-              - **holiday**: 공휴일 여부 (0: 평일, 1: 공휴일)  
-              - **workingday**: 근무일 여부 (0: 주말/공휴일, 1: 근무일)  
-              - **weather**: 날씨 상태  
-                - 1: 맑음·부분적으로 흐림  
-                - 2: 안개·흐림  
-                - 3: 가벼운 비/눈  
-                - 4: 폭우/폭설 등  
-              - **temp**: 실제 기온 (섭씨)  
-              - **atemp**: 체감 온도 (섭씨)  
-              - **humidity**: 상대 습도 (%)  
-              - **windspeed**: 풍속 (정규화된 값)  
-              - **casual**: 비등록 사용자 대여 횟수  
-              - **registered**: 등록 사용자 대여 횟수  
-              - **count**: 전체 대여 횟수 (casual + registered)
-            """)
-
-            st.subheader("1) 데이터 구조 (`df.info()`)")
-            buffer = io.StringIO()
-            df.info(buf=buffer)
-            st.text(buffer.getvalue())
-
-            st.subheader("2) 기초 통계량 (`df.describe()`)")
-            numeric_df = df.select_dtypes(include=[np.number])
-            st.dataframe(numeric_df.describe())
-
-            st.subheader("3) 샘플 데이터 (첫 5행)")
-            st.dataframe(df.head())
-
-        # 3. 데이터 로드 & 품질 체크
-        with tabs[2]:
-            st.header("📥 데이터 로드 & 품질 체크")
-            st.subheader("결측값 개수")
-            missing = df.isnull().sum()
-            st.bar_chart(missing)
-
-            duplicates = df.duplicated().sum()
-            st.write(f"- 중복 행 개수: {duplicates}개")
-
-        # 4. Datetime 특성 추출
-        with tabs[3]:
-            st.header("🕒 Datetime 특성 추출")
-            st.markdown("`datetime` 컬럼에서 연, 월, 일, 시, 요일 등을 추출합니다.")
-
-            df['year'] = df['datetime'].dt.year
-            df['month'] = df['datetime'].dt.month
-            df['day'] = df['datetime'].dt.day
-            df['hour'] = df['datetime'].dt.hour
-            df['dayofweek'] = df['datetime'].dt.dayofweek
-
-            st.subheader("추출된 특성 예시")
-            st.dataframe(df[['datetime', 'year', 'month', 'day', 'hour',
-                             'dayofweek']].head())
-
-            # --- 요일 숫자 → 요일명 매핑 (참고용) ---
-            day_map = {
-                0: '월요일',
-                1: '화요일',
-                2: '수요일',
-                3: '목요일',
-                4: '금요일',
-                5: '토요일',
-                6: '일요일'
+    def upload_file(self):
+        uploaded_file = st.file_uploader("Upload CSV File", type=["csv"])
+        if uploaded_file:
+            df = pd.read_csv(uploaded_file)
+            df.replace('-', 0, inplace=True)
+            df[['인구', '출생아수(명)', '사망자수(명)']] = df[['인구', '출생아수(명)', '사망자수(명)']].apply(pd.to_numeric)
+            self.df = df
+            self.translate_dict = {
+                '서울': 'Seoul', '부산': 'Busan', '대구': 'Daegu', '인천': 'Incheon',
+                '광주': 'Gwangju', '대전': 'Daejeon', '울산': 'Ulsan', '세종': 'Sejong',
+                '경기': 'Gyeonggi', '강원': 'Gangwon', '충북': 'Chungbuk', '충남': 'Chungnam',
+                '전북': 'Jeonbuk', '전남': 'Jeonnam', '경북': 'Gyeongbuk', '경남': 'Gyeongnam',
+                '제주': 'Jeju'
             }
-            st.markdown("**(참고) dayofweek 숫자 → 요일**")
-            # 중복 제거 후 정렬하여 표시
-            mapping_df = pd.DataFrame({
-                'dayofweek': list(day_map.keys()),
-                'weekday': list(day_map.values())
-            })
-            st.dataframe(mapping_df, hide_index=True)
+            self.build_tabs()
 
-        # 5. 시각화
-        with tabs[4]:
-            st.header("📈 시각화")
-            # by 근무일 여부
-            st.subheader("근무일 여부별 시간대별 평균 대여량")
-            fig1, ax1 = plt.subplots()
-            sns.pointplot(x='hour', y='count', hue='workingday', data=df,
-                          ax=ax1)
-            ax1.set_xlabel("Hour");
-            ax1.set_ylabel("Average Count")
-            st.pyplot(fig1)
-            st.markdown(
-                "> **해석:** 근무일(1)은 출퇴근 시간(7 ~ 9시, 17 ~ 19시)에 대여량이 급증하는 반면,\n"
-                "비근무일(0)은 오후(11 ~ 15시) 시간대에 대여량이 상대적으로 높게 나타납니다."
-            )
+    def build_tabs(self):
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+            "Basic Stats", "Yearly Trend", "Region-wise Analysis",
+            "Change Ranking", "Stacked Area", "Bonus UI"])
 
-            # by 요일
-            st.subheader("요일별 시간대별 평균 대여량")
-            fig2, ax2 = plt.subplots()
-            sns.pointplot(x='hour', y='count', hue='dayofweek', data=df, ax=ax2)
-            ax2.set_xlabel("Hour");
-            ax2.set_ylabel("Average Count")
-            st.pyplot(fig2)
-            st.markdown(
-                "> **해석:** 평일(월 ~ 금)은 출퇴근 피크가 두드러지고,\n"
-                "주말(토~일)은 오전 중반(10 ~ 14시)에 대여량이 더 고르게 분포하는 경향이 있습니다."
-            )
+        with tab1:
+            self.basic_stats()
 
-            # by 시즌
-            st.subheader("시즌별 시간대별 평균 대여량")
-            fig3, ax3 = plt.subplots()
-            sns.pointplot(x='hour', y='count', hue='season', data=df, ax=ax3)
-            ax3.set_xlabel("Hour");
-            ax3.set_ylabel("Average Count")
-            st.pyplot(fig3)
-            st.markdown(
-                "> **해석:** 여름(2)과 가을(3)에 전반적으로 대여량이 높고,\n"
-                "겨울(4)은 전 시간대에 걸쳐 대여량이 낮게 나타납니다."
-            )
+        with tab2:
+            self.yearly_trend()
 
-            # by 날씨
-            st.subheader("날씨 상태별 시간대별 평균 대여량")
-            fig4, ax4 = plt.subplots()
-            sns.pointplot(x='hour', y='count', hue='weather', data=df, ax=ax4)
-            ax4.set_xlabel("Hour");
-            ax4.set_ylabel("Average Count")
-            st.pyplot(fig4)
-            st.markdown(
-                "> **해석:** 맑음(1)은 전 시간대에서 대여량이 가장 높으며,\n"
-                "안개·흐림(2), 가벼운 비/눈(3)에선 다소 감소하고, 심한 기상(4)에서는 크게 떨어집니다."
-            )
+        with tab3:
+            self.region_analysis()
 
-        # 6. 상관관계 분석
-        with tabs[5]:
-            st.header("🔗 상관관계 분석")
-            # 관심 피처만 선택
-            features = ['temp', 'atemp', 'casual', 'registered', 'humidity',
-                        'windspeed', 'count']
-            corr_df = df[features].corr()
+        with tab4:
+            self.change_ranking()
 
-            # 상관계수 테이블 출력
-            st.subheader("📊 피처 간 상관계수")
-            st.dataframe(corr_df)
+        with tab5:
+            self.stacked_area()
 
-            # 히트맵 시각화
-            fig, ax = plt.subplots(figsize=(8, 6))
-            sns.heatmap(corr_df, annot=True, fmt=".2f", cmap="coolwarm", ax=ax)
-            ax.set_xlabel("")  # 축 이름 제거
-            ax.set_ylabel("")
-            st.pyplot(fig)
-            st.markdown(
-                "> **해석:**\n"
-                "- `count`는 `registered` (r≈0.99) 및 `casual` (r≈0.67)와 강한 양의 상관관계를 보입니다.\n"
-                "- `temp`·`atemp`와 `count`는 중간 정도의 양의 상관관계(r≈0.4~0.5)를 나타내며, 기온이 높을수록 대여량이 증가함을 시사합니다.\n"
-                "- `humidity`와 `windspeed`는 약한 음의 상관관계(r≈-0.2~-0.3)를 보여, 습도·풍속이 높을수록 대여량이 다소 감소합니다."
-            )
+        with tab6:
+            st.success("탭 기반 EDA UI가 완성되었습니다. 각 탭에서 다양한 분석 결과를 확인하세요.")
 
-        # 7. 이상치 제거
-        with tabs[6]:
-            st.header("🚫 이상치 제거")
-            # 평균·표준편차 계산
-            mean_count = df['count'].mean()
-            std_count = df['count'].std()
-            # 상한치: 평균 + 3*표준편차
-            upper = mean_count + 3 * std_count
+    def basic_stats(self):
+        st.subheader("기초 통계 및 데이터 구조")
+        st.text(str(self.df.info()))
+        st.dataframe(self.df.describe())
 
-            st.markdown(f"""
-                        - **평균(count)**: {mean_count:.2f}  
-                        - **표준편차(count)**: {std_count:.2f}  
-                        - **이상치 기준**: `count` > 평균 + 3×표준편차 = {upper:.2f}  
-                          (통계학의 68-95-99.7 법칙(Empirical rule)에 따라 평균에서 3σ를 벗어나는 관측치는 전체의 약 0.3%로 극단치로 간주)
-                        """)
-            df_no = df[df['count'] <= upper]
-            st.write(f"- 이상치 제거 전: {df.shape[0]}개, 제거 후: {df_no.shape[0]}개")
+    def yearly_trend(self):
+        df = self.df
+        st.subheader("Nationwide Population Trend")
+        nat = df[df["지역"] == "전국"]
+        fig, ax = plt.subplots()
+        sns.lineplot(data=nat, x="연도", y="인구", ax=ax)
+        ax.set_title("Population Trend")
+        ax.set_xlabel("Year")
+        ax.set_ylabel("Population")
 
-        # 8. 로그 변환
-        with tabs[7]:
-            st.header("🔄 로그 변환")
-            st.markdown("""
-                **로그 변환 맥락**  
-                - `count` 변수는 오른쪽으로 크게 치우친 분포(skewed distribution)를 가지고 있어,  
-                  통계 분석 및 모델링 시 정규성 가정이 어렵습니다.  
-                - 따라서 `Log(Count + 1)` 변환을 통해 분포의 왜도를 줄이고,  
-                  중앙값 주변으로 데이터를 모아 해석력을 높입니다.
-                """)
+        recent = nat.tail(3)
+        avg_diff = (recent["출생아수(명)"] - recent["사망자수(명)"]).mean()
+        predicted_2035 = nat["인구"].iloc[-1] + avg_diff * (2035 - nat["연도"].iloc[-1])
+        ax.scatter(2035, predicted_2035, color='red')
+        ax.text(2035, predicted_2035, f"2035: {int(predicted_2035):,}", color='red')
+        st.pyplot(fig)
 
-            # 변환 전·후 분포 비교
-            fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12, 4))
+    def region_analysis(self):
+        df = self.df
+        st.subheader("Regional 5-Year Change Analysis")
+        region_df = df[df['지역'] != '전국']
+        last_year = region_df['연도'].max()
+        recent = region_df[region_df['연도'] == last_year]
+        past = region_df[region_df['연도'] == last_year - 5]
 
-            # 원본 분포
-            sns.histplot(df['count'], kde=True, ax=axes[0])
-            axes[0].set_title("Original Count Distribution")
-            axes[0].set_xlabel("Count")
-            axes[0].set_ylabel("Frequency")
+        merged = pd.merge(recent[['지역', '인구']], past[['지역', '인구']], on='지역', suffixes=('_recent', '_past'))
+        merged['diff'] = (merged['인구_recent'] - merged['인구_past']) / 1000
+        merged['rate'] = (merged['diff'] / (merged['인구_past'] / 1000)) * 100
+        merged.sort_values(by='diff', ascending=False, inplace=True)
+        merged['지역'] = merged['지역'].map(self.translate_dict)
 
-            # 로그 변환 분포
-            df['log_count'] = np.log1p(df['count'])
-            sns.histplot(df['log_count'], kde=True, ax=axes[1])
-            axes[1].set_title("Log(Count + 1) Distribution")
-            axes[1].set_xlabel("Log(Count + 1)")
-            axes[1].set_ylabel("Frequency")
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.barplot(data=merged, y='지역', x='diff', ax=ax)
+        for i, val in enumerate(merged['diff']):
+            ax.text(val, i, f"{val:,.0f}", va='center')
+        ax.set_title("Population Change (last 5 years)")
+        ax.set_xlabel("Change (thousands)")
+        st.pyplot(fig)
 
-            st.pyplot(fig)
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.barplot(data=merged, y='지역', x='rate', ax=ax)
+        for i, val in enumerate(merged['rate']):
+            ax.text(val, i, f"{val:.1f}%", va='center')
+        ax.set_title("Population Change Rate (last 5 years)")
+        ax.set_xlabel("Rate (%)")
+        st.pyplot(fig)
 
-            st.markdown("""
-                > **그래프 해석:**  
-                > - 왼쪽: 원본 분포는 한쪽으로 긴 꼬리를 가진 왜곡된 형태입니다.  
-                > - 오른쪽: 로그 변환 후 분포는 훨씬 균형잡힌 형태로, 중앙값 부근에 데이터가 집중됩니다.  
-                > - 극단치의 영향이 완화되어 이후 분석·모델링 안정성이 높아집니다.
-                """)
+        st.markdown("Regions with growing populations show strong urban attraction, while declines may indicate aging or migration.")
+
+    def change_ranking(self):
+        df = self.df.copy()
+        st.subheader("Top 100 Population Changes (by year/region)")
+        df = df[df["지역"] != "전국"]
+        df["증감"] = df.groupby("지역")["인구"].diff()
+        top = df.dropna().sort_values(by="증감", ascending=False).head(100)
+        top["증감"] = top["증감"].apply(lambda x: f"{int(x):,}")
+        st.dataframe(
+            top[["연도", "지역", "인구", "증감"]].style.background_gradient(
+                subset=["증감"], cmap="coolwarm", axis=0)
+        )
+
+    def stacked_area(self):
+        df = self.df.copy()
+        st.subheader("Stacked Area Chart by Region")
+        pivot = df[df['지역'] != '전국'].pivot(index='연도', columns='지역', values='인구')
+        pivot.columns = [self.translate_dict.get(col, col) for col in pivot.columns]
+        fig, ax = plt.subplots(figsize=(12, 6))
+        pivot.plot.area(ax=ax, cmap='tab20')
+        ax.set_title("Stacked Area Chart of Population by Region")
+        ax.set_xlabel("Year")
+        ax.set_ylabel("Population")
+        st.pyplot(fig)
+
 
 
 # ---------------------
