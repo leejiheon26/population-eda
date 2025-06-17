@@ -269,7 +269,7 @@ class EDA:
     def yearly_population_trend(self):
         st.subheader("Nationwide Population Trend with 2035 Forecast")
     
-
+        df = self.df.copy()
         nat = df[df["지역"] == "전국"]
         nat["연도"] = pd.to_numeric(nat["연도"], errors="coerce")
         nat["인구"] = pd.to_numeric(nat["인구"], errors="coerce")
