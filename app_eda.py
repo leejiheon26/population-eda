@@ -228,16 +228,16 @@ class EDA:
             self.basic_stats()
 
         with tab2:
-            self.yearly_trend()
+            self.yearly_population_trend()
 
         with tab3:
             self.region_analysis()
 
         with tab4:
-            self.change_ranking()
+            self.change_and_growth_ranking()
 
         with tab5:
-            self.stacked_area()
+            self.population_overview_by_region()
 
         with tab6:
             st.success("탭 기반 EDA UI가 완성되었습니다. 각 탭에서 다양한 분석 결과를 확인하세요.")
@@ -269,6 +269,7 @@ class EDA:
     def yearly_population_trend(self):
         st.subheader("Nationwide Population Trend with 2035 Forecast")
     
+
         nat = df[df["지역"] == "전국"]
         nat["연도"] = pd.to_numeric(nat["연도"], errors="coerce")
         nat["인구"] = pd.to_numeric(nat["인구"], errors="coerce")
