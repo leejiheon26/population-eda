@@ -295,31 +295,41 @@ class EDA:
         st.pyplot(fig)
 
         st.markdown("Regions with growing populations show strong urban attraction, while declines may indicate aging or migration.")
-
     def change_ranking(self):
         df = self.df.copy()
         st.subheader("Top 100 Population Changes (by year/region)")
         df = df[df["지역"] != "전국"]
+        df = df.sort_values(["지역", "연도"])  # 연도 정렬 필수
+        
         df["증감"] = df.groupby("지역")["인구"].diff()
         top = df.dropna().sort_values(by="증감", ascending=False).head(100)
-        top["증감"] = top["증감"].apply(lambda x: f"{int(x):,}")
+        # 시각화용 숫자 포맷 컬럼 따로 생성
+        top["증감_표시"] = top["증감"].apply(lambda x: f"{int(x):,}")
+        # 숫자형 컬럼으로 그라디언트 적용
         st.dataframe(
-            top[["연도", "지역", "인구", "증감"]].style.background_gradient(
-                subset=["증감"], cmap="coolwarm", axis=0)
-        )
-
+            top[["연도", "지역", "인구", "증감_표시"]].style.background_gradient(
+                subset=["증감"], cmap="coolwarm", axis=0))
+    
     def stacked_area(self):
         df = self.df.copy()
         st.subheader("Stacked Area Chart by Region")
-        pivot = df[df['지역'] != '전국'].pivot(index='연도', columns='지역', values='인구')
+        df = df[df['지역'] != '전국']
+
+        # 연도 정렬 및 숫자형 변환
+        df["연도"] = pd.to_numeric(df["연도"], errors="coerce")
+        df = df.dropna(subset=["연도"])
+        df = df.sort_values("연도")
+
+        pivot = df.pivot(index='연도', columns='지역', values='인구')
         pivot.columns = [self.translate_dict.get(col, col) for col in pivot.columns]
+        pivot = pivot.fillna(0)
+
         fig, ax = plt.subplots(figsize=(12, 6))
         pivot.plot.area(ax=ax, cmap='tab20')
         ax.set_title("Stacked Area Chart of Population by Region")
         ax.set_xlabel("Year")
         ax.set_ylabel("Population")
         st.pyplot(fig)
-
 
 
 # ---------------------
