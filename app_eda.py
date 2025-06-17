@@ -244,8 +244,27 @@ class EDA:
 
     def basic_stats(self):
         st.subheader("기초 통계 및 데이터 구조")
-        st.text(str(self.df.info()))
-        st.dataframe(self.df.describe())
+
+        # '세종' 지역 데이터 전처리
+        df = self.df.copy()
+        sejong_mask = df['지역'] == '세종'
+        df.loc[sejong_mask] = df.loc[sejong_mask].replace('-', 0)
+
+        # 숫자형 컬럼 변환
+        for col in ['인구', '출생아수(명)', '사망자수(명)']:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+
+        # 결측치 제거 또는 0으로 대체 (선택)
+        df.fillna(0, inplace=True)
+
+        # 결과 출력
+        buffer = io.StringIO()
+        df.info(buf=buffer)
+        info_str = buffer.getvalue()
+        st.text(info_str)
+
+        st.dataframe(df.describe())
+
 
     def yearly_trend(self):
         df = self.df
