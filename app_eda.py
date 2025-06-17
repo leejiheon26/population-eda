@@ -228,16 +228,16 @@ class EDA:
             self.basic_stats()
 
         with tab2:
-            self.yearly_population_trend()
+            self.yearly_population_trend()  # ✅ 함수 이름 수정
 
         with tab3:
             self.region_analysis()
 
         with tab4:
-            self.change_and_growth_ranking()
+            self.change_and_growth_ranking()  # ✅ 이 부분도 함수 이름 일치시킴
 
         with tab5:
-            self.population_overview_by_region()
+            self.population_overview_by_region()  # ✅ 정확한 메서드 이름
 
         with tab6:
             st.success("탭 기반 EDA UI가 완성되었습니다. 각 탭에서 다양한 분석 결과를 확인하세요.")
